@@ -185,12 +185,49 @@ code {
   display: block;
 }
 
-#log .stderr {
+#log .stream-stderr {
   color: #ffb4b4;
 }
 
-#log .system {
+#log .stream-system {
   color: var(--accent);
+}
+
+#log .source-training {
+  color: #d8e0ea;
+}
+
+#log .source-utility {
+  color: #d2e8c9;
+}
+
+#log .source-web-ui {
+  color: #e8dcff;
+}
+
+.label {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.row.compact {
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.checkbox {
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.checkbox input {
+  accent-color: var(--accent);
 }
 
 footer {

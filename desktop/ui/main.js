@@ -3,26 +3,51 @@ const { listen } = window.__TAURI__.event;
 const { open } = window.__TAURI__.dialog;
 
 const $ = (id) => document.getElementById(id);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 const els = {
   statusRoot: $("status-root"),
   statusPython: $("status-python"),
   statusGpu: $("status-gpu"),
+  statusNode: $("status-node"),
+  statusGit: $("status-git"),
   setupHint: $("setup-hint"),
   pickFolder: $("btn-pick-folder"),
   recheck: $("btn-recheck"),
+
   configSelect: $("config-select"),
   start: $("btn-start"),
   stop: $("btn-stop"),
-  clearLog: $("btn-clear-log"),
   runStatus: $("run-status"),
+
+  updateRepo: $("btn-update-repo"),
+  installDeps: $("btn-install-deps"),
+  stopUtility: $("btn-stop-utility"),
+  utilityStatus: $("utility-status"),
+
+  launchWeb: $("btn-launch-web"),
+  openWeb: $("btn-open-web"),
+  stopWeb: $("btn-stop-web"),
+  webStatus: $("web-status"),
+
+  clearLog: $("btn-clear-log"),
   log: $("log"),
 };
 
 let state = {
   repoRoot: null,
-  running: false,
   selectedConfig: null,
+  training: false,
+  utility: false,
+  webUi: false,
+  webUiUrl: "http://localhost:8675",
+};
+
+const filters = {
+  training: true,
+  utility: true,
+  "web-ui": true,
+  system: true,
 };
 
 function setStatus(dd, text, cls) {
@@ -31,26 +56,45 @@ function setStatus(dd, text, cls) {
   if (cls) dd.classList.add(cls);
 }
 
-function appendLog(stream, line) {
+function appendLog(source, stream, line) {
   const el = document.createElement("span");
-  el.className = `line ${stream}`;
-  el.textContent = line + "\n";
+  el.className = `line source-${source} stream-${stream}`;
+  el.dataset.source = source;
+  el.textContent = `[${source}] ${line}\n`;
+  if (!filters[source]) el.style.display = "none";
   els.log.appendChild(el);
-  // Cap log to ~5000 lines to avoid DOM bloat
   while (els.log.childElementCount > 5000) {
     els.log.removeChild(els.log.firstChild);
   }
   els.log.scrollTop = els.log.scrollHeight;
 }
 
+function applyFilter(source) {
+  for (const node of els.log.querySelectorAll(`.source-${source}`)) {
+    node.style.display = filters[source] ? "" : "none";
+  }
+  els.log.scrollTop = els.log.scrollHeight;
+}
+
 function updateButtons() {
-  const canStart =
-    !!state.repoRoot && !!state.selectedConfig && !state.running;
-  els.start.disabled = !canStart;
-  els.stop.disabled = !state.running;
-  els.runStatus.textContent = state.running
+  els.start.disabled = !state.repoRoot || !state.selectedConfig || state.training;
+  els.stop.disabled = !state.training;
+  els.runStatus.textContent = state.training
     ? "Running training job. You can stop it at any time."
     : "Idle.";
+
+  els.updateRepo.disabled = !state.repoRoot || state.utility;
+  els.installDeps.disabled = !state.repoRoot || state.utility;
+  els.stopUtility.disabled = !state.utility;
+  els.utilityStatus.textContent = state.utility
+    ? "Maintenance task running. See log below."
+    : "No maintenance task running.";
+
+  els.launchWeb.disabled = !state.repoRoot || state.webUi;
+  els.stopWeb.disabled = !state.webUi;
+  els.webStatus.textContent = state.webUi
+    ? `Web UI is running at ${state.webUiUrl}. Click "Open in browser" to view it.`
+    : "Web UI is not running.";
 }
 
 async function refreshConfigs() {
@@ -81,43 +125,45 @@ async function refreshConfigs() {
       els.configSelect.appendChild(og);
     }
   } catch (e) {
-    appendLog("system", `Failed to list configs: ${e}`);
+    appendLog("system", "stderr", `Failed to list configs: ${e}`);
   }
 }
 
 async function refreshStatus() {
   const env = await invoke("check_environment");
 
+  state.repoRoot = env.repo_root || null;
   if (env.repo_root) {
-    state.repoRoot = env.repo_root;
     setStatus(els.statusRoot, env.repo_root, "ok");
   } else {
-    state.repoRoot = null;
-    setStatus(els.statusRoot, "not set — click 'Choose ai-toolkit folder'", "err");
+    setStatus(els.statusRoot, "not set - click 'Choose ai-toolkit folder'", "err");
   }
 
-  if (env.python) {
-    setStatus(els.statusPython, env.python, "ok");
-  } else {
-    setStatus(els.statusPython, "python not found on PATH (or venv missing)", "err");
-  }
+  if (env.python) setStatus(els.statusPython, env.python, "ok");
+  else setStatus(els.statusPython, "python not found on PATH (or venv missing)", "err");
 
-  if (env.gpu) {
-    setStatus(els.statusGpu, env.gpu, "ok");
-  } else {
-    setStatus(els.statusGpu, "no NVIDIA GPU detected (nvidia-smi not found)", "warn");
-  }
+  if (env.gpu) setStatus(els.statusGpu, env.gpu, "ok");
+  else setStatus(els.statusGpu, "no NVIDIA GPU detected (nvidia-smi not found)", "warn");
 
-  const missing = [];
-  if (!env.repo_root) missing.push("the ai-toolkit folder");
-  if (!env.python) missing.push("Python");
-  if (!env.gpu) missing.push("an NVIDIA GPU");
-  els.setupHint.textContent = missing.length
-    ? `Still missing: ${missing.join(", ")}.`
-    : "Looks good. You can pick a recipe below.";
+  if (env.node) setStatus(els.statusNode, env.node, "ok");
+  else setStatus(els.statusNode, "Node.js not found - Web UI launch will fail", "warn");
+
+  if (env.git) setStatus(els.statusGit, env.git, "ok");
+  else setStatus(els.statusGit, "git not found - Update button will fail", "warn");
+
+  const blockers = [];
+  if (!env.repo_root) blockers.push("the ai-toolkit folder");
+  if (!env.python) blockers.push("Python");
+  if (!env.gpu) blockers.push("an NVIDIA GPU");
+  els.setupHint.textContent = blockers.length
+    ? `Still missing: ${blockers.join(", ")}.`
+    : "Looks good. Pick a recipe above or use the shortcuts below.";
 
   await refreshConfigs();
-  state.running = await invoke("is_running");
+
+  state.training = await invoke("is_running");
+  state.utility = await invoke("is_utility_running");
+  state.webUi = await invoke("is_web_ui_running");
   updateButtons();
 }
 
@@ -126,61 +172,144 @@ async function pickFolder() {
   if (!selected) return;
   try {
     const root = await invoke("set_repo_root", { path: selected });
-    appendLog("system", `ai-toolkit folder set to ${root}`);
+    appendLog("system", "system", `ai-toolkit folder set to ${root}`);
     await refreshStatus();
   } catch (e) {
-    appendLog("system", `Could not use that folder: ${e}`);
+    appendLog("system", "stderr", `Could not use that folder: ${e}`);
   }
 }
 
-async function start() {
+async function startTraining() {
   if (!state.selectedConfig) return;
   try {
-    state.running = true;
+    state.training = true;
     updateButtons();
     await invoke("start_training", { configPath: state.selectedConfig });
   } catch (e) {
-    state.running = false;
-    appendLog("system", `Could not start: ${e}`);
+    state.training = false;
+    appendLog("training", "stderr", `Could not start: ${e}`);
     updateButtons();
   }
 }
 
-async function stop() {
+async function stopTraining() {
+  try { await invoke("stop_training"); }
+  catch (e) { appendLog("training", "stderr", `Could not stop: ${e}`); }
+}
+
+async function updateRepo() {
   try {
-    await invoke("stop_training");
+    state.utility = true;
+    updateButtons();
+    await invoke("update_repo");
   } catch (e) {
-    appendLog("system", `Could not stop: ${e}`);
+    state.utility = false;
+    appendLog("utility", "stderr", `Could not update: ${e}`);
+    updateButtons();
   }
+}
+
+async function installDeps() {
+  try {
+    state.utility = true;
+    updateButtons();
+    await invoke("install_deps");
+  } catch (e) {
+    state.utility = false;
+    appendLog("utility", "stderr", `Could not install: ${e}`);
+    updateButtons();
+  }
+}
+
+async function stopUtility() {
+  try { await invoke("stop_utility"); }
+  catch (e) { appendLog("utility", "stderr", `Could not stop: ${e}`); }
+}
+
+async function launchWebUi() {
+  try {
+    state.webUi = true;
+    updateButtons();
+    const url = await invoke("launch_web_ui");
+    state.webUiUrl = url;
+    updateButtons();
+    setTimeout(async () => {
+      try { await invoke("open_url", { url: state.webUiUrl }); }
+      catch {}
+    }, 8000);
+  } catch (e) {
+    state.webUi = false;
+    appendLog("web-ui", "stderr", `Could not launch Web UI: ${e}`);
+    updateButtons();
+  }
+}
+
+async function openWebInBrowser() {
+  try { await invoke("open_url", { url: state.webUiUrl }); }
+  catch (e) { appendLog("system", "stderr", `Could not open browser: ${e}`); }
+}
+
+async function stopWebUi() {
+  try { await invoke("stop_web_ui"); }
+  catch (e) { appendLog("web-ui", "stderr", `Could not stop Web UI: ${e}`); }
+}
+
+async function openShortcut(relPath) {
+  try { await invoke("open_path", { relPath }); }
+  catch (e) { appendLog("system", "stderr", `Could not open folder: ${e}`); }
 }
 
 function wireEvents() {
   els.pickFolder.addEventListener("click", pickFolder);
   els.recheck.addEventListener("click", refreshStatus);
-  els.start.addEventListener("click", start);
-  els.stop.addEventListener("click", stop);
-  els.clearLog.addEventListener("click", () => (els.log.innerHTML = ""));
+  els.start.addEventListener("click", startTraining);
+  els.stop.addEventListener("click", stopTraining);
   els.configSelect.addEventListener("change", () => {
     state.selectedConfig = els.configSelect.value || null;
     updateButtons();
   });
 
-  listen("training-log", (e) => {
-    const { stream, line } = e.payload;
-    appendLog(stream, line);
+  els.updateRepo.addEventListener("click", updateRepo);
+  els.installDeps.addEventListener("click", installDeps);
+  els.stopUtility.addEventListener("click", stopUtility);
+
+  els.launchWeb.addEventListener("click", launchWebUi);
+  els.openWeb.addEventListener("click", openWebInBrowser);
+  els.stopWeb.addEventListener("click", stopWebUi);
+
+  for (const btn of $$(".shortcut")) {
+    btn.addEventListener("click", () => openShortcut(btn.dataset.path));
+  }
+
+  els.clearLog.addEventListener("click", () => (els.log.innerHTML = ""));
+
+  for (const source of ["training", "utility", "web-ui", "system"]) {
+    const cb = $(`filter-${source}`);
+    if (!cb) continue;
+    cb.addEventListener("change", () => {
+      filters[source] = cb.checked;
+      applyFilter(source);
+    });
+  }
+
+  listen("app-log", (e) => {
+    const { source, stream, line } = e.payload;
+    appendLog(source, stream, line);
   });
-  listen("training-exit", () => {
-    state.running = false;
+  listen("job-end", (e) => {
+    const { source } = e.payload;
+    if (source === "training") state.training = false;
+    else if (source === "utility") state.utility = false;
+    else if (source === "web-ui") state.webUi = false;
     updateButtons();
   });
 }
 
 async function init() {
   wireEvents();
-  // Try auto-detecting the repo first
   try {
     const detected = await invoke("detect_repo_root");
-    if (detected) appendLog("system", `Detected ai-toolkit folder at ${detected}`);
+    if (detected) appendLog("system", "system", `Detected ai-toolkit folder at ${detected}`);
   } catch {}
   await refreshStatus();
 }
