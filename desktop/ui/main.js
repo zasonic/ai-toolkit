@@ -98,9 +98,10 @@ function updateButtons() {
     : "No maintenance task running.";
 
   els.launchWeb.disabled = !state.repoRoot || state.webUi;
+  els.openWeb.disabled = !state.webUi;
   els.stopWeb.disabled = !state.webUi;
   els.webStatus.textContent = state.webUi
-    ? `Web UI is running at ${state.webUiUrl}. Click "Open in browser" to view it.`
+    ? `Web UI process started at ${state.webUiUrl}. When the log shows 'ready', click "Open in browser".`
     : "Web UI is not running.";
 }
 
@@ -256,10 +257,6 @@ async function launchWebUi() {
     const url = await invoke("launch_web_ui");
     state.webUiUrl = url;
     updateButtons();
-    setTimeout(async () => {
-      try { await invoke("open_url", { url: state.webUiUrl }); }
-      catch {}
-    }, 8000);
   } catch (e) {
     state.webUi = false;
     appendLog("web-ui", "stderr", `Could not launch Web UI: ${e}`);

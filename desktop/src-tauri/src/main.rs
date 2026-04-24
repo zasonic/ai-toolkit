@@ -311,7 +311,9 @@ fn kill_child(child: &mut Child) {
     let pid = child.id();
     #[cfg(unix)]
     unsafe {
-        let _ = libc::kill(-(pid as i32), libc::SIGTERM);
+        // SIGKILL to the whole process group so PyTorch dataloader workers
+        // (and any other children of the python process) also die.
+        let _ = libc::kill(-(pid as i32), libc::SIGKILL);
     }
     #[cfg(windows)]
     {
@@ -328,18 +330,18 @@ fn spawn_and_stream(
     mut cmd: Command,
     friendly_desc: &str,
 ) -> Result<u32, String> {
-    {
-        let state: State<AppState> = app.state();
-        let guard = slot_guard(&state, slot);
-        if guard.is_some() {
-            return Err(format!("{} is already running.", friendly_desc));
-        }
-    }
-
     cmd.stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .env("PYTHONUNBUFFERED", "1");
     configure_group(&mut cmd);
+
+    // Hold the slot lock from the "already running?" check through storing
+    // the new Child so two fast clicks cannot both pass the check and race.
+    let state: State<AppState> = app.state();
+    let mut guard = slot_guard(&state, slot);
+    if guard.is_some() {
+        return Err(format!("{friendly_desc} is already running."));
+    }
 
     let mut child = cmd
         .spawn()
@@ -367,10 +369,8 @@ fn spawn_and_stream(
     });
 
     let pid = child.id();
-    {
-        let state: State<AppState> = app.state();
-        *slot_guard(&state, slot) = Some(child);
-    }
+    *guard = Some(child);
+    drop(guard);
 
     let app_wait = app.clone();
     let src_wait = source.to_string();
@@ -428,6 +428,16 @@ fn start_training(
         .unwrap()
         .clone()
         .ok_or_else(|| "ai-toolkit folder has not been set.".to_string())?;
+
+    if config_path.trim().is_empty() {
+        return Err("No config file was selected.".into());
+    }
+    let cfg = Path::new(&config_path);
+    let cfg_abs = if cfg.is_absolute() { cfg.to_path_buf() } else { root.join(cfg) };
+    if !cfg_abs.is_file() {
+        return Err(format!("Config file not found: {}", cfg_abs.display()));
+    }
+
     let py = python_cmd(&root);
 
     let mut cmd = Command::new(&py);
@@ -437,7 +447,7 @@ fn start_training(
         &app,
         "training",
         "system",
-        format!("Starting: {} run.py {}", py, config_path),
+        format!("Starting: {py} run.py {config_path}"),
     );
     spawn_and_stream(app, Slot::Training, cmd, "Training")
 }
@@ -538,13 +548,15 @@ fn launch_web_ui(app: AppHandle, state: State<'_, AppState>) -> Result<String, S
         &app,
         "web-ui",
         "system",
-        format!("Running: npm run {} (in ui/)", script),
+        format!("Running: npm run {script} (in ui/)"),
     );
     emit_log(
         &app,
         "web-ui",
         "system",
-        format!("First-time launch can take several minutes. The browser will open at {}.", WEB_UI_URL),
+        format!(
+            "First-time launch can take several minutes. When you see 'ready' in the log, click 'Open in browser' to visit {WEB_UI_URL}."
+        ),
     );
     spawn_and_stream(app.clone(), Slot::WebUi, cmd, "Web UI")?;
     Ok(WEB_UI_URL.to_string())

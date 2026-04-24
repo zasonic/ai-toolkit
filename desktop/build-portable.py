@@ -119,7 +119,12 @@ def flatten_python_tarball_root(py_dir: Path) -> None:
 def extract_tarball(tarball: Path, dest: Path) -> None:
     dest.mkdir(parents=True, exist_ok=True)
     with tarfile.open(tarball, "r:*") as tf:
-        tf.extractall(dest)
+        # Python 3.12+ requires an extraction filter or warns loudly.
+        # 'data' blocks absolute paths, path traversal, device nodes, etc.
+        try:
+            tf.extractall(dest, filter="data")
+        except TypeError:
+            tf.extractall(dest)
 
 
 def copy_source(repo_root: Path, staging: Path) -> None:
