@@ -3,7 +3,6 @@
 
 use std::{
     collections::HashSet,
-    ffi::OsStr,
     fs,
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
@@ -221,7 +220,10 @@ fn python_cmd(root: &Path) -> String {
 }
 
 fn first_line_of(cmd: &str, args: &[&str]) -> Option<String> {
-    let out = Command::new(cmd).args(args).output().ok()?;
+    let mut command = Command::new(cmd);
+    command.args(args);
+    no_window(&mut command);
+    let out = command.output().ok()?;
     if !out.status.success() {
         return None;
     }
@@ -293,6 +295,19 @@ fn is_web_ui_running(state: State<'_, AppState>) -> bool {
     try_wait_slot(&state, Slot::WebUi)
 }
 
+fn no_window(cmd: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = cmd;
+    }
+}
+
 fn configure_group(cmd: &mut Command) {
     #[cfg(unix)]
     {
@@ -302,8 +317,11 @@ fn configure_group(cmd: &mut Command) {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
-        cmd.creation_flags(CREATE_NEW_PROCESS_GROUP);
+        // CREATE_NEW_PROCESS_GROUP lets us send Ctrl-Break to the whole tree
+        // and CREATE_NO_WINDOW keeps a console window from popping up.
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
     }
 }
 
@@ -317,9 +335,10 @@ fn kill_child(child: &mut Child) {
     }
     #[cfg(windows)]
     {
-        let _ = Command::new("taskkill")
-            .args(["/T", "/F", "/PID", &pid.to_string()])
-            .output();
+        let mut cmd = Command::new("taskkill");
+        cmd.args(["/T", "/F", "/PID", &pid.to_string()]);
+        no_window(&mut cmd);
+        let _ = cmd.output();
     }
     let _ = child.kill();
 }
@@ -572,25 +591,6 @@ fn stop_web_ui(app: AppHandle) -> Result<(), String> {
     }
 }
 
-fn os_open<S: AsRef<OsStr>>(target: S) -> std::io::Result<()> {
-    #[cfg(target_os = "linux")]
-    {
-        Command::new("xdg-open").arg(target).spawn()?;
-    }
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open").arg(target).spawn()?;
-    }
-    #[cfg(target_os = "windows")]
-    {
-        Command::new("cmd")
-            .args(["/C", "start", ""])
-            .arg(target)
-            .spawn()?;
-    }
-    Ok(())
-}
-
 #[tauri::command]
 fn open_path(state: State<'_, AppState>, rel_path: String) -> Result<(), String> {
     let root = state
@@ -613,7 +613,7 @@ fn open_path(state: State<'_, AppState>, rel_path: String) -> Result<(), String>
             return Err(format!("Path does not exist: {}", target.display()));
         }
     }
-    os_open(&target).map_err(|e| format!("Could not open: {e}"))
+    opener::open(&target).map_err(|e| format!("Could not open: {e}"))
 }
 
 #[tauri::command]
@@ -621,7 +621,7 @@ fn open_url(url: String) -> Result<(), String> {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return Err("Only http:// and https:// URLs can be opened.".into());
     }
-    os_open(&url).map_err(|e| format!("Could not open URL: {e}"))
+    opener::open_browser(&url).map_err(|e| format!("Could not open URL: {e}"))
 }
 
 fn main() {

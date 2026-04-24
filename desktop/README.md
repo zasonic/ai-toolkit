@@ -93,6 +93,10 @@ The user unzips that folder anywhere and double-clicks `AI-Toolkit`. The launche
 
 ### Steps on the build machine (same OS as the target)
 
+> **Windows note:** the build must run on a Windows PC (cross-compiling Tauri to Windows is impractical). Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the "Desktop development with C++" workload, [Rust](https://rustup.rs/), and [Node.js LTS](https://nodejs.org/) before starting. While the build runs (especially the `pip install` step), temporarily add `desktop\` and your system temp folder to Windows Defender exclusions — real-time scanning makes the PyTorch install 5–10x slower otherwise.
+
+> **Windows WebView2:** the launcher bundles a fixed WebView2 runtime so the zip works on any Windows 10/11 even without Edge. Download the [WebView2 Fixed Version Runtime](https://developer.microsoft.com/microsoft-edge/webview2/?form=MA13LH#download-section) (the "Fixed Version" CAB, x64), extract it so its contents live at `desktop/src-tauri/webview2-runtime/Microsoft.WebView2.FixedVersionRuntime.<version>.x64/`. The `tauri.conf.json` `bundle.windows.webviewInstallMode` already points there.
+
 1. Build the Tauri launcher:
    ```bash
    cd desktop
@@ -120,12 +124,13 @@ The user unzips that folder anywhere and double-clicks `AI-Toolkit`. The launche
 ### What the end user does
 
 1. Download the zip.
-2. Right-click → "Extract All" / "Unzip" somewhere on their drive with enough free space.
+2. Right-click → "Extract All" / "Unzip" to a **short path** like `C:\AIToolkit\` (NOT inside `Documents\Downloads\…`). Some Python packages on Windows break when nested paths exceed 260 characters.
 3. Open the resulting folder and double-click the launcher.
-4. The first time only, macOS / Windows may warn about an unrecognized app — right-click → "Open" once.
-5. In the GUI: pick a training recipe, click **Start training**, watch the log.
+4. **Windows SmartScreen** will say "Windows protected your PC" the first time — click **More info → Run anyway**. macOS may show a similar warning — right-click → **Open** instead of double-clicking, then confirm.
+5. If Windows Defender quarantines the launcher, open Windows Security → Virus & threat protection → Protection history, find the entry, and click **Allow on device**.
+6. In the GUI: pick a training recipe, click **Start training**, watch the log.
 
-No terminal, no installer, no package manager, no GitHub.
+No terminal, no installer, no package manager, no GitHub. The bundled `README-FOR-USERS.txt` walks them through the same steps.
 
 ### Things to curate before packaging
 

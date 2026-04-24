@@ -25,12 +25,18 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "icon": [
       "icons/icon.png"
     ],
     "category": "DeveloperTool",
     "shortDescription": "Friendly launcher for ai-toolkit training jobs",
-    "longDescription": "A simple desktop app that makes it easy to start, stop, and watch ai-toolkit training jobs without using the terminal."
+    "longDescription": "A simple desktop app that makes it easy to start, stop, and watch ai-toolkit training jobs without using the terminal.",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "fixedRuntime",
+        "path": "./webview2-runtime/"
+      }
+    }
   }
 }
