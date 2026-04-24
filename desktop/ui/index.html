@@ -12,6 +12,10 @@
       <p class="subtitle">Pick a training recipe and press Start. Use the shortcuts below for everything else.</p>
     </header>
 
+    <div id="portable-banner" class="banner" hidden>
+      Running from the portable bundle. Everything is pre-installed; you do not need to update or run any setup.
+    </div>
+
     <section class="card" id="setup-card">
       <h2>Setup</h2>
       <dl class="status">
@@ -30,6 +34,9 @@
         <button id="btn-pick-folder" class="secondary">Choose ai-toolkit folder</button>
         <button id="btn-recheck" class="secondary">Re-check setup</button>
       </div>
+      <div class="row" id="portable-row" hidden>
+        <button id="btn-recheck-portable" class="secondary">Re-check setup</button>
+      </div>
       <p class="hint" id="setup-hint"></p>
     </section>
 
@@ -44,7 +51,7 @@
       <p class="hint" id="run-status">Idle.</p>
     </section>
 
-    <section class="card">
+    <section class="card" id="card-maintenance">
       <h2>Maintenance</h2>
       <p class="hint">Keep the toolkit up to date. Both tasks use the log below so you can see what is happening.</p>
       <div class="row">
@@ -55,7 +62,7 @@
       <p class="hint" id="utility-status">No maintenance task running.</p>
     </section>
 
-    <section class="card">
+    <section class="card" id="card-web-ui">
       <h2>Advanced Web UI</h2>
       <p class="hint">The full Next.js Web UI has dataset management, sample previews, and job editing. First launch can take several minutes.</p>
       <div class="row">

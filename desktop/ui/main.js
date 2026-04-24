@@ -6,6 +6,11 @@ const $ = (id) => document.getElementById(id);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 const els = {
+  portableBanner: $("portable-banner"),
+  portableRow: $("portable-row"),
+  cardMaintenance: $("card-maintenance"),
+  cardWebUi: $("card-web-ui"),
+
   statusRoot: $("status-root"),
   statusPython: $("status-python"),
   statusGpu: $("status-gpu"),
@@ -14,6 +19,7 @@ const els = {
   setupHint: $("setup-hint"),
   pickFolder: $("btn-pick-folder"),
   recheck: $("btn-recheck"),
+  recheckPortable: $("btn-recheck-portable"),
 
   configSelect: $("config-select"),
   start: $("btn-start"),
@@ -41,6 +47,7 @@ let state = {
   utility: false,
   webUi: false,
   webUiUrl: "http://localhost:8675",
+  portable: false,
 };
 
 const filters = {
@@ -129,8 +136,20 @@ async function refreshConfigs() {
   }
 }
 
+function applyPortableMode(isPortable) {
+  state.portable = isPortable;
+  els.portableBanner.hidden = !isPortable;
+  els.cardMaintenance.hidden = isPortable;
+  els.cardWebUi.hidden = isPortable;
+  // Swap the Setup action row: portable users shouldn't reassign the folder.
+  els.pickFolder.parentElement.hidden = isPortable;
+  els.portableRow.hidden = !isPortable;
+}
+
 async function refreshStatus() {
   const env = await invoke("check_environment");
+
+  applyPortableMode(!!env.is_portable);
 
   state.repoRoot = env.repo_root || null;
   if (env.repo_root) {
@@ -145,11 +164,13 @@ async function refreshStatus() {
   if (env.gpu) setStatus(els.statusGpu, env.gpu, "ok");
   else setStatus(els.statusGpu, "no NVIDIA GPU detected (nvidia-smi not found)", "warn");
 
+  // In portable mode we don't show the Node/git rows' warnings since those
+  // buttons are hidden anyway.
   if (env.node) setStatus(els.statusNode, env.node, "ok");
-  else setStatus(els.statusNode, "Node.js not found - Web UI launch will fail", "warn");
+  else setStatus(els.statusNode, state.portable ? "not needed in portable mode" : "Node.js not found - Web UI launch will fail", state.portable ? "ok" : "warn");
 
   if (env.git) setStatus(els.statusGit, env.git, "ok");
-  else setStatus(els.statusGit, "git not found - Update button will fail", "warn");
+  else setStatus(els.statusGit, state.portable ? "not needed in portable mode" : "git not found - Update button will fail", state.portable ? "ok" : "warn");
 
   const blockers = [];
   if (!env.repo_root) blockers.push("the ai-toolkit folder");
@@ -157,7 +178,9 @@ async function refreshStatus() {
   if (!env.gpu) blockers.push("an NVIDIA GPU");
   els.setupHint.textContent = blockers.length
     ? `Still missing: ${blockers.join(", ")}.`
-    : "Looks good. Pick a recipe above or use the shortcuts below.";
+    : state.portable
+      ? "You are all set. Pick a recipe and press Start."
+      : "Looks good. Pick a recipe above or use the shortcuts below.";
 
   await refreshConfigs();
 
@@ -262,6 +285,7 @@ async function openShortcut(relPath) {
 function wireEvents() {
   els.pickFolder.addEventListener("click", pickFolder);
   els.recheck.addEventListener("click", refreshStatus);
+  els.recheckPortable.addEventListener("click", refreshStatus);
   els.start.addEventListener("click", startTraining);
   els.stop.addEventListener("click", stopTraining);
   els.configSelect.addEventListener("change", () => {

@@ -71,6 +71,67 @@ desktop/
     └── main.js
 ```
 
+## Packaging a double-click portable bundle for non-technical users
+
+If the end user cannot install Python, Rust, or npm — they can only unzip a folder and double-click — build a portable bundle on your own machine that contains everything pre-installed. Your parents (or whoever) then unzip it once and run it with no further setup.
+
+### What you build (once per OS)
+
+```
+AI-Toolkit-Portable/
+├── AI-Toolkit(.exe)        <- the Tauri launcher, pre-compiled
+├── portable.flag           <- makes the launcher hide update/web-ui buttons
+├── run.py, toolkit/, ...   <- the ai-toolkit source
+├── config/                 <- put curated recipes here before zipping
+├── output/, datasets/      <- created empty for the user
+└── python-portable/        <- standalone Python + every dependency pre-installed
+    ├── bin/python3 (or python.exe)
+    └── lib/...
+```
+
+The user unzips that folder anywhere and double-clicks `AI-Toolkit`. The launcher auto-detects the portable layout, uses the bundled Python, and hides the "Update / Install Python packages / Launch Web UI" buttons (which don't apply in a pre-bundled setup).
+
+### Steps on the build machine (same OS as the target)
+
+1. Build the Tauri launcher:
+   ```bash
+   cd desktop
+   npm install
+   npm run build
+   ```
+   The binary ends up at `desktop/src-tauri/target/release/ai-toolkit-desktop` (or `.exe`).
+2. Download a standalone Python from [python-build-standalone](https://github.com/astral-sh/python-build-standalone/releases). Pick a recent **CPython 3.11 or 3.12** `install_only` tarball for your platform:
+   - Linux: `cpython-3.12.*-x86_64-unknown-linux-gnu-install_only.tar.gz`
+   - macOS Apple Silicon: `cpython-3.12.*-aarch64-apple-darwin-install_only.tar.gz`
+   - macOS Intel: `cpython-3.12.*-x86_64-apple-darwin-install_only.tar.gz`
+   - Windows: `cpython-3.12.*-x86_64-pc-windows-msvc-install_only.tar.gz`
+3. Run the packager:
+   ```bash
+   python desktop/build-portable.py \
+       --python-tarball path/to/cpython-3.12.*-install_only.tar.gz \
+       --tauri-bin desktop/src-tauri/target/release/ai-toolkit-desktop \
+       --output AI-Toolkit-Portable-Linux.zip
+   ```
+   This copies the ai-toolkit source into a staging folder, extracts the standalone Python into `python-portable/`, runs `pip install -r requirements.txt` into that Python, copies the launcher, writes `portable.flag`, and zips it up.
+
+   The step takes a while (~5-15 min) and produces an **8-15 GB zip** — PyTorch's bundled CUDA wheels are the bulk of the size. That's unavoidable for an offline AI-training bundle.
+4. Drop the zip in a cloud share (Dropbox / Google Drive / Mega) and send the link.
+
+### What the end user does
+
+1. Download the zip.
+2. Right-click → "Extract All" / "Unzip" somewhere on their drive with enough free space.
+3. Open the resulting folder and double-click the launcher.
+4. The first time only, macOS / Windows may warn about an unrecognized app — right-click → "Open" once.
+5. In the GUI: pick a training recipe, click **Start training**, watch the log.
+
+No terminal, no installer, no package manager, no GitHub.
+
+### Things to curate before packaging
+
+- Delete config files from `config/examples/` the user won't need, or pre-stage a few ready-to-run recipes at the top level of `config/` that point to `datasets/my-images/` (a folder the packager creates empty for them).
+- If the recipe downloads base models from HuggingFace the first time it runs, the user needs an internet connection for that one initial download. To go fully offline, run the recipe yourself on the build machine so HuggingFace caches the weights, then copy `~/.cache/huggingface/` into the portable bundle (this is large — another 20+ GB for FLUX).
+
 ## Limitations
 
 - On macOS and Linux the app spawns Python in its own process group so Stop kills the whole tree; on Windows it uses `taskkill /T /F`. If a training crash leaves orphan processes, use Task Manager / `ps` to clean up.

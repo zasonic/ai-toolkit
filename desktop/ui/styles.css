@@ -30,6 +30,16 @@ header {
   padding: 28px 32px 12px;
 }
 
+.banner {
+  margin: 16px 32px 0;
+  padding: 12px 18px;
+  border-radius: 10px;
+  background: #1d2a3d;
+  border: 1px solid #2f4866;
+  color: #cfe2ff;
+  font-size: 14px;
+}
+
 header h1 {
   font-size: 28px;
   margin: 0 0 4px;

@@ -39,6 +39,7 @@ struct EnvStatus {
     node: Option<String>,
     git: Option<String>,
     repo_root: Option<String>,
+    is_portable: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -247,12 +248,18 @@ fn check_environment(state: State<'_, AppState>) -> EnvStatus {
     let node = first_line_of("node", &["--version"]);
     let git = first_line_of("git", &["--version"]);
 
+    let portable = repo_root
+        .as_ref()
+        .map(|r| r.join("portable.flag").is_file() || r.join("python-portable").is_dir())
+        .unwrap_or(false);
+
     EnvStatus {
         python,
         gpu,
         node,
         git,
         repo_root: repo_root.map(|p| p.to_string_lossy().into_owned()),
+        is_portable: portable,
     }
 }
 
