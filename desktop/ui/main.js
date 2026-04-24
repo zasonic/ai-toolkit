@@ -1,6 +1,14 @@
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
-const { open } = window.__TAURI__.dialog;
+
+// tauri-plugin-dialog's JS bindings live in the @tauri-apps/plugin-dialog
+// npm package and are NOT auto-injected by withGlobalTauri. Call the plugin
+// command directly through invoke() so we don't need a JS bundler.
+async function pickDirectory() {
+  return invoke("plugin:dialog|open", {
+    options: { directory: true, multiple: false },
+  });
+}
 
 const $ = (id) => document.getElementById(id);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -159,8 +167,16 @@ async function refreshStatus() {
     setStatus(els.statusRoot, "not set - click 'Choose ai-toolkit folder'", "err");
   }
 
-  if (env.python) setStatus(els.statusPython, env.python, "ok");
-  else setStatus(els.statusPython, "python not found on PATH (or venv missing)", "err");
+  if (env.python) {
+    const m = env.python.match(/(\d+)\.(\d+)/);
+    if (m && (parseInt(m[1], 10) < 3 || (parseInt(m[1], 10) === 3 && parseInt(m[2], 10) < 10))) {
+      setStatus(els.statusPython, `${env.python} - too old, ai-toolkit needs Python 3.10 or newer`, "err");
+    } else {
+      setStatus(els.statusPython, env.python, "ok");
+    }
+  } else {
+    setStatus(els.statusPython, "python not found on PATH (or venv missing)", "err");
+  }
 
   if (env.gpu) setStatus(els.statusGpu, env.gpu, "ok");
   else setStatus(els.statusGpu, "no NVIDIA GPU detected (nvidia-smi not found)", "warn");
@@ -192,7 +208,13 @@ async function refreshStatus() {
 }
 
 async function pickFolder() {
-  const selected = await open({ directory: true, multiple: false });
+  let selected;
+  try {
+    selected = await pickDirectory();
+  } catch (e) {
+    appendLog("system", "stderr", `Could not open folder picker: ${e}`);
+    return;
+  }
   if (!selected) return;
   try {
     const root = await invoke("set_repo_root", { path: selected });

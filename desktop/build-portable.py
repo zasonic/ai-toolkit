@@ -32,7 +32,6 @@ host (Dropbox, Google Drive, Mega, etc.) and share the link with your parents.
 from __future__ import annotations
 
 import argparse
-import os
 import platform
 import shutil
 import subprocess
@@ -138,19 +137,35 @@ def copy_source(repo_root: Path, staging: Path) -> None:
             shutil.copytree(src, staging / dname, ignore=ignore_patterns)
 
 
-def install_requirements(py_exe: Path, staging: Path) -> None:
+def install_requirements(
+    py_exe: Path,
+    staging: Path,
+    torch_versions: tuple[str, str, str],
+    torch_index_url: str,
+) -> None:
+    # 1. Bootstrap pip + build tools.
+    subprocess.check_call(
+        [str(py_exe), "-m", "pip", "install", "--upgrade", "pip", "wheel", "setuptools"]
+    )
+    # 2. Install CUDA-enabled torch FIRST from PyTorch's wheel index. ai-toolkit's
+    #    requirements.txt does not pin torch; if we skip this step, transitive
+    #    deps pull a CPU-only torch and the bundle silently cannot use the GPU.
+    torch, torchvision, torchaudio = torch_versions
     subprocess.check_call(
         [
             str(py_exe),
             "-m",
             "pip",
             "install",
-            "--upgrade",
-            "pip",
-            "wheel",
-            "setuptools",
+            "--no-cache-dir",
+            f"torch=={torch}",
+            f"torchvision=={torchvision}",
+            f"torchaudio=={torchaudio}",
+            "--index-url",
+            torch_index_url,
         ]
     )
+    # 3. Install everything else.
     subprocess.check_call(
         [
             str(py_exe),
@@ -188,6 +203,17 @@ def main() -> int:
         default=None,
         help="Filename for the launcher in the zip. Default: 'AI-Toolkit' (+'.exe' on Windows).",
     )
+    # Defaults match ai-toolkit/README.md; bump them when ai-toolkit pins newer torch.
+    parser.add_argument("--torch-version", default="2.9.1")
+    parser.add_argument("--torchvision-version", default="0.24.1")
+    parser.add_argument("--torchaudio-version", default="2.9.1")
+    parser.add_argument(
+        "--torch-index-url",
+        default="https://download.pytorch.org/whl/cu128",
+        help="PyTorch wheel index. Defaults to CUDA 12.8 builds. "
+             "Use https://download.pytorch.org/whl/cu121 for older drivers, "
+             "or https://download.pytorch.org/whl/cpu for CPU-only.",
+    )
     args = parser.parse_args()
 
     if not args.python_tarball.is_file():
@@ -195,6 +221,17 @@ def main() -> int:
         return 2
     if not args.tauri_bin.is_file():
         print(f"Tauri binary not found: {args.tauri_bin}", file=sys.stderr)
+        return 2
+
+    # ai-toolkit's requirements_base.txt installs diffusers via `git+https://...`,
+    # so the build machine needs git on PATH. Fail early with a clear message.
+    if shutil.which("git") is None:
+        print(
+            "git was not found on PATH. The build needs git because\n"
+            "requirements_base.txt installs diffusers from a git URL.\n"
+            "Install Git for Windows (https://git-scm.com/download/win) and re-run.",
+            file=sys.stderr,
+        )
         return 2
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -219,8 +256,16 @@ def main() -> int:
         py_exe = find_portable_python(py_dir)
         log(f"       python: {py_exe}")
 
-        log("[3/6] Installing Python packages (this takes a while) ...")
-        install_requirements(py_exe, staging)
+        log(
+            f"[3/6] Installing Python packages (CUDA torch first from "
+            f"{args.torch_index_url}, then requirements.txt; this takes a while) ..."
+        )
+        install_requirements(
+            py_exe,
+            staging,
+            (args.torch_version, args.torchvision_version, args.torchaudio_version),
+            args.torch_index_url,
+        )
 
         log(f"[4/6] Copying Tauri launcher as {launcher_name} ...")
         target_launcher = staging / launcher_name

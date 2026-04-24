@@ -9,9 +9,6 @@ rust-version = "1.77"
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
-[target.'cfg(windows)'.build-dependencies]
-embed-manifest = "1"
-
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"

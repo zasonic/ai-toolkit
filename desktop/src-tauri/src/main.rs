@@ -624,6 +624,14 @@ fn open_url(url: String) -> Result<(), String> {
     opener::open_browser(&url).map_err(|e| format!("Could not open URL: {e}"))
 }
 
+fn kill_all_children(app: &AppHandle) {
+    // Best-effort: kill anything we have spawned so the user does not leave
+    // orphaned python / npm processes holding the GPU after closing the window.
+    let _ = stop_slot(app, Slot::Training);
+    let _ = stop_slot(app, Slot::Utility);
+    let _ = stop_slot(app, Slot::WebUi);
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -652,6 +660,22 @@ fn main() {
             open_path,
             open_url,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .setup(|app| {
+            if let Some(window) = app.get_webview_window("main") {
+                let app_handle = app.handle().clone();
+                window.on_window_event(move |event| {
+                    if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                        kill_all_children(&app_handle);
+                    }
+                });
+            }
+            Ok(())
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+                kill_all_children(app_handle);
+            }
+        });
 }
