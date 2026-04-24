@@ -1,0 +1,31 @@
+[package]
+name = "ai-toolkit-desktop"
+version = "0.1.0"
+description = "Friendly desktop launcher for ai-toolkit training jobs"
+authors = ["ai-toolkit contributors"]
+edition = "2021"
+rust-version = "1.77"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[target.'cfg(windows)'.build-dependencies]
+embed-manifest = "1"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+opener = { version = "0.7", default-features = false }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[[bin]]
+name = "ai-toolkit-desktop"
+path = "src/main.rs"

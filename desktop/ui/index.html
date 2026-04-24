@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Toolkit</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>AI Toolkit</h1>
+      <p class="subtitle">Pick a training recipe and press Start. Use the shortcuts below for everything else.</p>
+    </header>
+
+    <div id="portable-banner" class="banner" hidden>
+      Running from the portable bundle. Everything is pre-installed; you do not need to update or run any setup.
+    </div>
+
+    <section class="card" id="setup-card">
+      <h2>Setup</h2>
+      <dl class="status">
+        <dt>ai-toolkit folder</dt>
+        <dd id="status-root">checking...</dd>
+        <dt>Python</dt>
+        <dd id="status-python">checking...</dd>
+        <dt>GPU</dt>
+        <dd id="status-gpu">checking...</dd>
+        <dt>Node.js (for Web UI)</dt>
+        <dd id="status-node">checking...</dd>
+        <dt>git (for Update)</dt>
+        <dd id="status-git">checking...</dd>
+      </dl>
+      <div class="row">
+        <button id="btn-pick-folder" class="secondary">Choose ai-toolkit folder</button>
+        <button id="btn-recheck" class="secondary">Re-check setup</button>
+      </div>
+      <div class="row" id="portable-row" hidden>
+        <button id="btn-recheck-portable" class="secondary">Re-check setup</button>
+      </div>
+      <p class="hint" id="setup-hint"></p>
+    </section>
+
+    <section class="card">
+      <h2>Training</h2>
+      <label for="config-select" class="label">Pick a recipe</label>
+      <select id="config-select" size="8" aria-label="Training recipes"></select>
+      <div class="row big">
+        <button id="btn-start" class="primary" disabled>Start training</button>
+        <button id="btn-stop" class="danger" disabled>Stop</button>
+      </div>
+      <p class="hint" id="run-status">Idle.</p>
+    </section>
+
+    <section class="card" id="card-maintenance">
+      <h2>Maintenance</h2>
+      <p class="hint">Keep the toolkit up to date. Both tasks use the log below so you can see what is happening.</p>
+      <div class="row">
+        <button id="btn-update-repo" class="secondary">Update ai-toolkit (git pull)</button>
+        <button id="btn-install-deps" class="secondary">Install / update Python packages</button>
+        <button id="btn-stop-utility" class="secondary" disabled>Stop task</button>
+      </div>
+      <p class="hint" id="utility-status">No maintenance task running.</p>
+    </section>
+
+    <section class="card" id="card-web-ui">
+      <h2>Advanced Web UI</h2>
+      <p class="hint">The full Next.js Web UI has dataset management, sample previews, and job editing. First launch can take several minutes.</p>
+      <div class="row">
+        <button id="btn-launch-web" class="primary">Launch Web UI</button>
+        <button id="btn-open-web" class="secondary">Open in browser</button>
+        <button id="btn-stop-web" class="danger" disabled>Stop Web UI</button>
+      </div>
+      <p class="hint" id="web-status">Web UI is not running.</p>
+    </section>
+
+    <section class="card">
+      <h2>Shortcuts</h2>
+      <p class="hint">Open common folders without hunting through the file manager.</p>
+      <div class="row">
+        <button class="secondary shortcut" data-path="output">Open output folder</button>
+        <button class="secondary shortcut" data-path="config">Open configs folder</button>
+        <button class="secondary shortcut" data-path="datasets">Open datasets folder</button>
+        <button class="secondary shortcut" data-path=".">Open project folder</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Log</h2>
+      <div class="row compact">
+        <label class="checkbox"><input type="checkbox" id="filter-training" checked /> Training</label>
+        <label class="checkbox"><input type="checkbox" id="filter-utility" checked /> Maintenance</label>
+        <label class="checkbox"><input type="checkbox" id="filter-web-ui" checked /> Web UI</label>
+        <label class="checkbox"><input type="checkbox" id="filter-system" checked /> System</label>
+        <button id="btn-clear-log" class="secondary">Clear log</button>
+      </div>
+      <div id="log" role="log" aria-live="polite"></div>
+    </section>
+
+    <footer>
+      <p>Training AI models needs a capable NVIDIA GPU, Python with CUDA, and time. If the setup checks above are red, ask someone to help you install those first.</p>
+    </footer>
+
+    <script type="module" src="main.js"></script>
+  </body>
+</html>

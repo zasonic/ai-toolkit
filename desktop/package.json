@@ -1,0 +1,14 @@
+{
+  "name": "ai-toolkit-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tauri + Rust desktop launcher for ai-toolkit",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

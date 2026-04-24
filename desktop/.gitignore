@@ -1,0 +1,8 @@
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/Cargo.lock
+
+# Repo root .gitignore has *.manifest (PyInstaller). The Windows app manifest
+# embedded by build.rs is intentional, so un-ignore it.
+!src-tauri/longpath.manifest
