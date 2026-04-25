@@ -201,7 +201,11 @@ def main() -> int:
     parser.add_argument(
         "--launcher-name",
         default=None,
-        help="Filename for the launcher in the zip. Default: 'AI-Toolkit' (+'.exe' on Windows).",
+        help=(
+            "Filename for the launcher in the zip. Defaults to a name that "
+            "screams at the end user: 'START HERE - Windows.exe' on Windows, "
+            "'START HERE - Mac' on macOS, 'START HERE - Linux' elsewhere."
+        ),
     )
     # Defaults match ai-toolkit/README.md; bump them when ai-toolkit pins newer torch.
     parser.add_argument("--torch-version", default="2.9.1")
@@ -240,17 +244,31 @@ def main() -> int:
         return 2
 
     is_windows = platform.system().lower().startswith("win")
-    launcher_name = args.launcher_name or ("AI-Toolkit.exe" if is_windows else "AI-Toolkit")
+    is_mac = platform.system().lower() == "darwin"
+    if args.launcher_name:
+        launcher_name = args.launcher_name
+    elif is_windows:
+        launcher_name = "START HERE - Windows.exe"
+    elif is_mac:
+        launcher_name = "START HERE - Mac"
+    else:
+        launcher_name = "START HERE - Linux"
 
     with tempfile.TemporaryDirectory(prefix="ai-toolkit-portable-") as td:
         staging = Path(td) / "AI-Toolkit-Portable"
         staging.mkdir()
+        # Bury the source, the bundled Python, output/, datasets/ and the
+        # portable.flag inside _internal/. The end user only sees the launcher
+        # and READ ME FIRST.txt at the top of the folder; the launcher walks
+        # into _internal/ to find run.py.
+        internal = staging / "_internal"
+        internal.mkdir()
 
-        log(f"[1/6] Copying ai-toolkit source into {staging} ...")
-        copy_source(repo_root, staging)
+        log(f"[1/6] Copying ai-toolkit source into {internal} ...")
+        copy_source(repo_root, internal)
 
         log("[2/6] Extracting portable Python ...")
-        py_dir = staging / "python-portable"
+        py_dir = internal / "python-portable"
         extract_tarball(args.python_tarball, py_dir)
         flatten_python_tarball_root(py_dir)
         py_exe = find_portable_python(py_dir)
@@ -262,7 +280,7 @@ def main() -> int:
         )
         install_requirements(
             py_exe,
-            staging,
+            internal,
             (args.torch_version, args.torchvision_version, args.torchaudio_version),
             args.torch_index_url,
         )
@@ -273,50 +291,52 @@ def main() -> int:
         if not is_windows:
             target_launcher.chmod(0o755)
 
-        log("[5/6] Writing portable.flag and user README ...")
-        (staging / "portable.flag").write_text("1\n")
-        (staging / "output").mkdir(exist_ok=True)
-        (staging / "datasets").mkdir(exist_ok=True)
-        (staging / "README-FOR-USERS.txt").write_text(
-            "AI Toolkit (portable)\n"
-            "=====================\n\n"
-            "BEFORE YOU START\n"
-            "----------------\n"
-            "Unzip this folder somewhere with a SHORT path, like:\n"
-            "    C:\\AIToolkit\\\n"
-            "    D:\\AIToolkit\\\n"
-            "Do NOT leave it inside Downloads or Documents. Some Python packages\n"
-            "break when the path is too long (Windows 260-character limit).\n\n"
-            "TO RUN\n"
-            "------\n"
-            f"1. Double-click \"{launcher_name}\".\n"
-            "2. The first time only, Windows may show a blue\n"
-            "   \"Windows protected your PC\" box (SmartScreen). This is normal\n"
-            "   for any app that is not signed. Click \"More info\", then\n"
-            "   \"Run anyway\". Windows will remember and not ask again.\n"
-            "3. If Windows Defender or another antivirus quarantines the\n"
-            "   launcher, open Windows Security -> Virus & threat protection\n"
-            "   -> Protection history, find the entry, and choose\n"
-            "   \"Allow on device\".\n"
-            "4. In the app, pick a training recipe from the list and press\n"
-            "   the blue Start training button.\n\n"
-            "WHERE THINGS LIVE\n"
-            "-----------------\n"
-            "  - Trained models are saved in   output\\\n"
-            "  - Put your training images in   datasets\\\n"
-            "  - Training recipes (configs) in config\\\n"
-            "Use the buttons in the app to open these folders -\n"
-            "you do not need File Explorer.\n\n"
-            "TROUBLESHOOTING\n"
-            "---------------\n"
-            "  - Slow unzip? Use 7-Zip (free, https://www.7-zip.org/)\n"
-            "    instead of the built-in Windows unzipper.\n"
-            "  - Launcher does not open? Make sure you have an NVIDIA GPU\n"
-            "    and that the path is short (see above).\n"
-            "  - Anything else? Take a screenshot and send it to whoever\n"
-            "    set this up for you.\n\n"
-            "This bundle is self-contained. No installation required.\n"
-        )
+        log("[5/6] Writing portable.flag and 'READ ME FIRST.txt' ...")
+        (internal / "portable.flag").write_text("1\n")
+        (internal / "output").mkdir(exist_ok=True)
+        (internal / "datasets").mkdir(exist_ok=True)
+        readme_lines = [
+            "AI TOOLKIT  ---  read this once, then never again",
+            "================================================",
+            "",
+            "STEP 1.  Make sure this folder is somewhere with a SHORT path,",
+            "         for example:    C:\\AIToolkit\\",
+            "         NOT inside Downloads or Documents (paths get too long).",
+            "",
+            f"STEP 2.  Double-click  \"{launcher_name}\".",
+            "         The app window opens. That is the whole setup.",
+            "",
+            "STEP 3.  Inside the window, pick a recipe from the list and",
+            "         click the big blue  \"Start training\"  button.",
+            "",
+            "",
+            "FIRST-TIME WARNINGS  (only the first time you launch)",
+            "-----------------------------------------------------",
+            "  * Blue \"Windows protected your PC\" box?",
+            "      Click  \"More info\"  ->  \"Run anyway\".",
+            "  * Defender quarantined the app?",
+            "      Open  Windows Security  ->  Virus & threat protection",
+            "      ->  Protection history,  find it,  click  \"Allow on device\".",
+            "",
+            "WHERE THINGS LIVE",
+            "-----------------",
+            "  Trained models      ->  output\\",
+            "  Your training images ->  datasets\\",
+            "  Training recipes     ->  config\\  (use the buttons in the app)",
+            "",
+            "TROUBLE?",
+            "--------",
+            "  * Slow to unzip?  Use 7-Zip (free, https://www.7-zip.org/).",
+            "  * App will not open?  Check you have an NVIDIA GPU and that this",
+            "    folder lives at a short path like C:\\AIToolkit\\.",
+            "  * Anything else?  Take a screenshot and send it to whoever",
+            "    set this up for you.",
+            "",
+            "Everything is bundled. No install. No internet needed (after",
+            "the first model download, if your recipe needs one).",
+            "",
+        ]
+        (staging / "READ ME FIRST.txt").write_text("\r\n".join(readme_lines))
 
         log(f"[6/6] Creating zip at {args.output} ...")
         args.output.parent.mkdir(parents=True, exist_ok=True)

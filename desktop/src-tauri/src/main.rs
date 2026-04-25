@@ -93,11 +93,24 @@ fn emit_log(app: &AppHandle, source: &str, stream: &str, line: impl Into<String>
     );
 }
 
+fn looks_like_repo(dir: &Path) -> bool {
+    dir.join("run.py").is_file() && dir.join("toolkit").is_dir()
+}
+
 fn find_repo_root_from(start: &Path) -> Option<PathBuf> {
+    // Walk up from `start`. At each level, also peek inside common bundle
+    // subfolders (`_internal`, `internal`, `app`) so a portable layout that
+    // hides the source from the user still resolves correctly.
     let mut current = Some(start.to_path_buf());
     while let Some(dir) = current {
-        if dir.join("run.py").is_file() && dir.join("toolkit").is_dir() {
+        if looks_like_repo(&dir) {
             return Some(dir);
+        }
+        for sub in ["_internal", "internal", "app"] {
+            let candidate = dir.join(sub);
+            if looks_like_repo(&candidate) {
+                return Some(candidate);
+            }
         }
         current = dir.parent().map(|p| p.to_path_buf());
     }

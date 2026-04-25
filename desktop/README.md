@@ -75,21 +75,24 @@ desktop/
 
 If the end user cannot install Python, Rust, or npm — they can only unzip a folder and double-click — build a portable bundle on your own machine that contains everything pre-installed. Your parents (or whoever) then unzip it once and run it with no further setup.
 
-### What you build (once per OS)
+### What the unzipped folder looks like to your parents
 
 ```
 AI-Toolkit-Portable/
-├── AI-Toolkit(.exe)        <- the Tauri launcher, pre-compiled
-├── portable.flag           <- makes the launcher hide update/web-ui buttons
-├── run.py, toolkit/, ...   <- the ai-toolkit source
-├── config/                 <- put curated recipes here before zipping
-├── output/, datasets/      <- created empty for the user
-└── python-portable/        <- standalone Python + every dependency pre-installed
-    ├── bin/python3 (or python.exe)
-    └── lib/...
+├── START HERE - Windows.exe   <- the only thing they need to double-click
+├── READ ME FIRST.txt          <- short plain-text instructions
+└── _internal/                 <- everything else lives here, hidden in plain sight
+    ├── run.py, toolkit/, ...      <- the ai-toolkit source
+    ├── config/                    <- training recipes
+    ├── output/                    <- trained models land here (open via the app button)
+    ├── datasets/                  <- training images go here (open via the app button)
+    ├── portable.flag              <- makes the launcher skip update/setup buttons
+    └── python-portable/           <- bundled Python + every dependency
+        ├── bin/python3 (or python.exe)
+        └── lib/...
 ```
 
-The user unzips that folder anywhere and double-clicks `AI-Toolkit`. The launcher auto-detects the portable layout, uses the bundled Python, and hides the "Update / Install Python packages / Launch Web UI" buttons (which don't apply in a pre-bundled setup).
+When they open the folder in File Explorer the **only three** items at the top are the launcher (`.exe`), the readme (`.txt`), and one folder (`_internal/`) whose leading underscore says "don't touch". The launcher walks into `_internal/` to find `run.py`, uses the bundled Python, and hides the Update / Install Python / Launch Web UI buttons. To get to outputs and datasets your parents click the in-app shortcut buttons — they should never have to navigate `_internal/` themselves.
 
 ### Steps on the build machine (same OS as the target)
 
